@@ -15,6 +15,8 @@
 //   - lodash           4.17.21→ 4.18.0   (CVE-2026-4800) — HIGH RCE via template imports
 //   - path-to-regexp   0.1.12 → 0.1.13   (CVE-2026-4867) — HIGH ReDoS  (transitive via express)
 //   - tar-fs           2.1.1  → 2.1.4    (CVE-2024-12905, CVE-2025-48387, CVE-2025-59343) — HIGH path traversal/symlink (transitive)
+//   - nanoid           3.3.8  → 3.3.18   (CVE-2026-67213, CVE-2026-67214, CVE-2026-73086) — HIGH DoS + predictable IDs
+//   - sharp            0.33.5 → 0.35.0   (GHSA-f88m-g3jw-g9cj: CVE-2026-33327/33328/35590/35591) — HIGH inherited libvips
 //
 // Strategy:
 //   - Direct deps: bump in `dependencies` so `npm install` picks them up.
@@ -44,6 +46,23 @@ pkg.dependencies.lodash = '^4.18.0';
 // ajv is a direct dep — npm rejects overrides on direct deps (EOVERRIDE), so
 // bump it here (CVE: ReDoS via `$data` option, <=8.17.1).
 pkg.dependencies.ajv = '^8.20.0';
+// nanoid and sharp are direct deps too — same reason as ajv: an override on a
+// direct dep is rejected with EOVERRIDE, so they get bumped in `dependencies`.
+//
+// nanoid stays on the 3.x line ON PURPOSE. nanoid 5.x is ESM-only and the
+// compiled server loads it with `require('nanoid')` (utils.js, slug.js,
+// controllers/token.js, server.js, logger/formatters.js and the
+// 20220202231058_image.js migration), so 5.x would break startup outright.
+// 3.3.18 covers all three CVEs (fixed in 3.3.12 / 3.3.16 / 3.3.18).
+// CVE-2026-73086 is the one that actually bites here: token.js mints auth
+// tokens with customRandom(urlAlphabet, 30, random).
+pkg.dependencies.nanoid = '^3.3.18';
+// sharp: the only call site is sharp(buffer).resize().webp().toFile() in
+// utils.js (downloadAsset), an API that is unchanged in 0.34/0.35. The risk in
+// this jump is not the API but the native binary on Alpine musl — hence the
+// require('sharp') smoke test in the Dockerfile after npm install, so a binary
+// that fails to load breaks the build instead of reaching production.
+pkg.dependencies.sharp = '^0.35.0';
 
 pkg.overrides = pkg.overrides || {};
 // Plain global overrides (apply everywhere unless a deeper-nested rule wins).
@@ -77,7 +96,7 @@ if (JSON.stringify(pkg.dependencies) === before && pkg.overrides && Object.keys(
 
 fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
 console.log('security updates: package.json updated');
-console.log('  direct: axios, fast-xml-parser, form-data, lodash');
+console.log('  direct: axios, fast-xml-parser, form-data, lodash, ajv, nanoid, sharp');
 console.log('  overrides: path-to-regexp, tar-fs (+ direct deps for transitive enforcement)');
 
 })();
