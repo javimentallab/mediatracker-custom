@@ -245,6 +245,10 @@ RUN node /tmp/patch_49_aip_drops_when_season_over.js
 COPY patch_50_boot_reason_probe.js /tmp/patch_50_boot_reason_probe.js
 RUN node /tmp/patch_50_boot_reason_probe.js
 
+# --- patch_51: la estrella de puntuar tambien en items sin fecha de estreno ---
+COPY patch_51_rate_star_without_release_date.js /tmp/patch_51_rate_star_without_release_date.js
+RUN node /tmp/patch_51_rate_star_without_release_date.js
+
 # Bucket 10 — backgrounds, CSS rules, css_rename hash bump, tokens UI, jellyfin
 # import buttons, bundle_rename hash bump, index.html title, PWA manifest+SW.
 # This bucket MUST run last among the patches because css_rename and bundle_rename
