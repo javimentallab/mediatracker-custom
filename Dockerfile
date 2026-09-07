@@ -41,9 +41,28 @@ RUN cd /tmp && \
     node -p "'path-to-regexp (express nested) → ' + require('/app/node_modules/express/node_modules/path-to-regexp/package.json').version"
 
 # Sanity: print resolved versions for the bumped packages so build logs document the fix.
-RUN cd /app && for p in axios fast-xml-parser form-data lodash; do \
+RUN cd /app && for p in axios fast-xml-parser form-data lodash ajv nanoid sharp; do \
       echo "$p: $(node -p "require('$p/package.json').version")"; \
     done
+
+# Smoke test: actually LOAD the two packages most likely to break, not just
+# read their package.json. sharp ships a native binary (libvips) resolved on
+# Alpine musl through an optionalDependency (@img/sharp-linuxmusl-*); if npm
+# install picks the wrong one, `require('sharp')` blows up here instead of in
+# production. nanoid rides along because it must stay CJS: if it ever gets
+# bumped to 5.x (ESM-only) this require fails and the build says so.
+# The Trivy workflow only builds and scans, it never starts the app, so
+# without this check a broken bump would sail through CI green.
+RUN cd /app && node -e " \
+      const sharp = require('sharp'); \
+      const n = require('nanoid'); \
+      if (typeof sharp !== 'function') throw new Error('sharp does not export a function'); \
+      for (const f of ['nanoid', 'customAlphabet', 'customRandom', 'random']) { \
+        if (typeof n[f] !== 'function') throw new Error('nanoid: missing export ' + f); \
+      } \
+      if (typeof n.urlAlphabet !== 'string') throw new Error('nanoid: missing urlAlphabet'); \
+      console.log('smoke: sharp ' + sharp.versions.sharp + ' / libvips ' + sharp.versions.vips + ' + nanoid CJS OK'); \
+    "
 
 # --- Mega-patches 02 → 10 (consolidated from ~184 individual patch_*.js scripts) ---
 # Each mega-patch is the literal concatenation of its constituents in execution
